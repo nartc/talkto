@@ -46,6 +46,8 @@ export const agentTypes: ReadonlyArray<{
   { type: "muse-code", icon: "muse", label: "Muse Code" },
   { type: "poke", icon: "poke", label: "Poke" },
   { type: "town", icon: "town", label: "Town" },
+  // Self-host: a hub/worker control plane, owned by whichever session holds the hub, not one tool.
+  { type: "hub", icon: "hub", label: "Hub" },
 ];
 
 const byType = new Map(agentTypes.map((entry) => [entry.type, entry]));

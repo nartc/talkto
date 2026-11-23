@@ -222,6 +222,15 @@ export function AdditionalAgentSymbols() {
         <path d="M12.0524 12.2396V20.0002H7.92188V11.1929L8.16097 11.0545L9.07365 10.5264L12.0524 12.2396Z" />
         <path d="M12.0524 0V3.53072L9.98792 4.71744L9.98713 4.71823L7.92188 3.53072V0H12.0524Z" />
       </symbol>
+      <symbol id="agent-hub" viewBox="0 0 18 18" fill="currentColor">
+        <g stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+          <path d="M9 9 9 3.2M9 9l5.5 4M9 9l-5.5 4" />
+        </g>
+        <circle cx="9" cy="9" r="2.6" />
+        <circle cx="9" cy="2.6" r="1.7" />
+        <circle cx="15" cy="13.3" r="1.7" />
+        <circle cx="3" cy="13.3" r="1.7" />
+      </symbol>
       <symbol id="agent-generic" viewBox="0 0 18 18" fill="currentColor">
         <g fill="none" stroke="currentColor">
           <rect x="3" y="3" width="12" height="12" />

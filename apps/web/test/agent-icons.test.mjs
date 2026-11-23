@@ -16,7 +16,7 @@ test("every known client resolves to a bundled glyph; host context is explicit a
   const symbols = renderToStaticMarkup(createElement(AgentSymbols));
   const ids = [...symbols.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, "SVG masks and clips must have unique IDs");
-  assert.equal(new Set(agentTypes.map((entry) => entry.icon)).size, 25);
+  assert.equal(new Set(agentTypes.map((entry) => entry.icon)).size, 26);
   for (const entry of agentTypes) {
     const rendered = renderToStaticMarkup(createElement(AgentIcon, { type: entry.type }));
     assert.ok(rendered.includes(`href="#agent-${entry.icon}"`));
@@ -45,6 +45,7 @@ test("every known client resolves to a bundled glyph; host context is explicit a
     ["ChatGPT", "chatgpt"],
     ["Poke", "poke"],
     ["Town", "town"],
+    ["Hub", "hub"],
     ["Muse Code", "muse-code"],
     ["muse_code", "muse-code"],
     ["muse", "muse"],
