@@ -17,6 +17,7 @@ import * as W from "@talkto/api/wake";
 import * as Wakes from "./wakes/service.js";
 import * as Actors from "./actors.js";
 import * as R from "@talkto/api/renames";
+import * as Removals from "@talkto/api/removals";
 import * as Capabilities from "./capabilities.js";
 
 const invalid = (message: string) => new E.InvalidInput({ message });
@@ -409,6 +410,11 @@ export const execute = Effect.fn("Agent.execute")(function* (
       const { serverId: _server, participantId, ...input } = command.input;
       return { ...(yield* service.renameSelf(access, participantId, input)), meta };
     }
+    case Removals.toolName:
+      return {
+        ...(yield* service.retireAgent(access, command.input.participantId, command.input.agentId)),
+        meta,
+      };
     case "read_messages": {
       const input = command.input;
       switch (input.mode) {

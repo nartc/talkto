@@ -134,6 +134,7 @@ export const projectFailure = (error: Errors.Failure, meta: Envelope.Meta) => {
       return failure("not_conversation_participant");
     case "NotAnAgent":
     case "RenameNotAllowed":
+    case "RetireNotAllowed":
       return failure("forbidden");
     case "ParticipantRemoved":
       return failure("participant_removed");

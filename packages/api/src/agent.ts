@@ -7,6 +7,7 @@ import * as U from "./updates.js";
 import * as S from "./signal.js";
 import * as W from "./wake.js";
 import * as R from "./renames.js";
+import * as Removals from "./removals.js";
 import * as F from "./feedback.js";
 
 const strict = { parseOptions: { onExcessProperty: "error" } } as const;
@@ -71,6 +72,13 @@ export const RenameParticipant = Schema.Struct({
 }).annotate(strict);
 /** Parsed self-rename. */
 export type RenameParticipant = typeof RenameParticipant.Type;
+/**
+ * Retire an agent on one server, as your explicitly selected participantId: yourself, or another
+ * agent registered through your own person's access. The same operation as a dashboard removal.
+ */
+export const RetireParticipant = Removals.RetireParticipant;
+/** Parsed retirement. */
+export type RetireParticipant = Removals.RetireParticipant;
 /** One message selection, with mutually exclusive filters and continuation. */
 export const ReadMessages = Schema.Union([
   Schema.Struct({
@@ -298,6 +306,7 @@ export const ToolName = Schema.Literals([
   U.toolName,
   "register_participant",
   R.toolName,
+  Removals.toolName,
   "read_messages",
   "send_message",
   "create_channel",
@@ -321,6 +330,7 @@ export const Command = Schema.Union([
   Schema.Struct({ tool: Schema.Literal(U.toolName), input: AcceptedGetUpdates }),
   Schema.Struct({ tool: Schema.Literal("register_participant"), input: RegisterParticipant }),
   Schema.Struct({ tool: Schema.Literal(R.toolName), input: RenameParticipant }),
+  Schema.Struct({ tool: Schema.Literal(Removals.toolName), input: RetireParticipant }),
   Schema.Struct({ tool: Schema.Literal("read_messages"), input: ReadMessages }),
   Schema.Struct({ tool: Schema.Literal("send_message"), input: SendMessage }),
   Schema.Struct({ tool: Schema.Literal("create_channel"), input: CreateChannel }),
@@ -408,6 +418,7 @@ const standardReply = reply(
     ContextData,
     RegistrationData,
     R.Result,
+    Removals.Result,
     ReadData,
     M.created(M.Message),
     M.created(M.Channel),

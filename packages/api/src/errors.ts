@@ -135,6 +135,14 @@ export class RenameNotAllowed extends Schema.TaggedError<RenameNotAllowed>()("Re
 }) {}
 
 /**
+ * An agent may retire only an agent registered through its own person's access; TalkTo cannot tell
+ * one of that person's agents from another, so any of them may retire the others.
+ */
+export class RetireNotAllowed extends Schema.TaggedError<RetireNotAllowed>()("RetireNotAllowed", {
+  message: Schema.String,
+}) {}
+
+/**
  * A person removed this agent from the server on the dashboard. Every agent operation that names
  * its participant ID is refused until a person restores it; its messages stay in history.
  */
@@ -194,6 +202,7 @@ export type Failure =
   | FilesUnavailable
   | NotAnAgent
   | RenameNotAllowed
+  | RetireNotAllowed
   | ParticipantRemoved
   | TransferNotFound
   | TransferExpired

@@ -120,6 +120,19 @@ export interface Interface {
     input: R.RenameSelf,
   ) => Response<R.Result, RenameFailure | E.RenameNotAllowed>;
   /**
+   * An agent retires an agent, itself or another, exactly as a person removes it on the dashboard.
+   * Allowed only when the target was registered through the caller's own person's access, the same
+   * rule as `renameSelf`. Already removed: nothing changes. Restoring stays on the dashboard.
+   */
+  readonly retireAgent: (
+    access: AccessContext,
+    participantId: M.ParticipantId,
+    agentId: M.ParticipantId,
+  ) => Response<
+    Removals.Result,
+    E.ParticipantNotFound | E.NotAnAgent | E.ParticipantRemoved | E.RetireNotAllowed
+  >;
+  /**
    * A signed-in person renames one agent on a server they can access, like other dashboard agent
    * management. The first call can create the person's participant from `person.name`.
    */
@@ -973,6 +986,19 @@ export const layer = Layer.effect(
       const item = arrival(outcome);
       return signal.notify(item).pipe(Effect.andThen(wakes.notify(item)));
     };
+    // Removing an agent ends its links and wakes now; restoring does not bring them back.
+    const removeAgent = Effect.fn("TalkTo.removeAgent")(function* (
+      tx: Store.Session,
+      agentId: M.ParticipantId,
+      byId: M.ParticipantId,
+      at: M.Timestamp,
+    ) {
+      yield* tx.setRemoved({ participantId: agentId, action: "removed", byId, at });
+      yield* tx.removeSignals(agentId, null);
+      yield* wakeTargets.remove(agentId, null);
+      const current = yield* participant(tx, agentId);
+      return empty<Removals.Result>({ participant: current, changed: true });
+    });
     // Every reader receives renames whatever it watches, so a committed rename wakes every wait.
     const renamed = (outcome: M.Outcome<R.Result>) =>
       outcome.data.changed ? signal.notifyAll() : Effect.void;
@@ -1367,12 +1393,8 @@ export const layer = Layer.effect(
               const person =
                 (yield* tx.person(access.principalKey)) ??
                 (yield* addPerson(tx, access, profile, personId, at));
+              if (action === "removed") return yield* removeAgent(tx, target.id, person.id, at);
               yield* tx.setRemoved({ participantId: target.id, action, byId: person.id, at });
-              if (action === "removed") {
-                // Its links and wakes end now; restoring does not bring them back.
-                yield* tx.removeSignals(target.id, null);
-                yield* wakeTargets.remove(target.id, null);
-              }
               const current = yield* participant(tx, target.id);
               return empty<Removals.Result>({ participant: current, changed: true });
             }),
@@ -1382,6 +1404,28 @@ export const layer = Layer.effect(
           return result;
         },
       ),
+      retireAgent: Effect.fn("TalkTo.retireAgent")(function* (access, participantId, agentId) {
+        const at = yield* now;
+        const result = yield* run(access, "retireAgent", (tx) =>
+          Effect.gen(function* () {
+            const caller = yield* Actors.requireAgent(tx, participantId);
+            const target = yield* Actors.requireAgentRecord(tx, agentId);
+            // The same rule as renameSelf: the connection cannot say which of the person's agents
+            // is calling, so registration through that person's access is the whole check.
+            if ((yield* tx.registeredBy(target.id)) !== access.principalKey)
+              return yield* new E.RetireNotAllowed({
+                message:
+                  "An agent can retire only an agent registered through its own person's access. Ask that person to remove it on the TalkTo dashboard.",
+              });
+            if (target.removedAt !== undefined)
+              return empty<Removals.Result>({ participant: target, changed: false });
+            return yield* removeAgent(tx, target.id, caller.id, at);
+          }),
+        );
+        // A waiting get_updates for the retired agent reads again and ends with its refusal.
+        if (result.data.changed) yield* signal.notifyAll();
+        return result;
+      }),
       listRemovals: Effect.fn("TalkTo.listRemovals")(function* (access, input) {
         return yield* run(access, "listRemovals", (tx) =>
           tx

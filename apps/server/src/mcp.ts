@@ -19,6 +19,7 @@ import * as U from "@talkto/api/updates";
 import * as Monitoring from "./monitoring.js";
 import * as S from "@talkto/api/signal";
 import * as R from "@talkto/api/renames";
+import * as Removals from "@talkto/api/removals";
 import * as W from "@talkto/api/wake";
 import * as McpEvents from "./wakes/mcp-events.js";
 import * as ToolInput from "./tool-input.js";
@@ -114,6 +115,15 @@ const definitions = [
     A.RenameParticipant,
     A.reply(R.Result),
     false,
+  ),
+  tool(
+    Removals.toolName,
+    "Retire an agent from this server, as your explicitly selected participantId: the same as a person removing it on the TalkTo dashboard. agentId may be yourself or another agent registered through your own person's access, such as an earlier session's identity you have replaced. Its messages stay in history marked removed; every operation naming it is then refused with participant_removed, its waits end, and its signal links, wakes and Auto-start are deleted. Its name stays reserved until a person renames it. Only a person can restore it, on the dashboard. Retiring a removed agent changes nothing. Not metered.",
+    A.RetireParticipant,
+    A.reply(Removals.Result),
+    false,
+    // Only a person can undo it, on the dashboard.
+    true,
   ),
   tool(
     "read_messages",

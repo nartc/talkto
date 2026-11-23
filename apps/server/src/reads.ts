@@ -4,6 +4,7 @@ import * as E from "@talkto/api/errors";
 import * as M from "@talkto/api/models";
 import * as U from "@talkto/api/updates";
 import * as R from "@talkto/api/renames";
+import * as Removals from "@talkto/api/removals";
 import * as S from "@talkto/api/signal";
 import * as W from "@talkto/api/wake";
 import { adminPerMinute, deepReadUnits } from "@talkto/api/pricing";
@@ -371,6 +372,7 @@ export const classifyAdmin = (command: A.Command): AdminCall | null => {
     case "register_participant":
       return call(null);
     case R.toolName:
+    case Removals.toolName:
     case "create_channel":
     case "set_channel_archived":
     case S.createToolName:

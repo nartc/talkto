@@ -1165,6 +1165,7 @@ test("MCP authentication discovery, catalog, instructions and protocol compatibi
       "get_updates",
       "register_participant",
       "rename_participant",
+      "retire_participant",
       "read_messages",
       "send_message",
       "create_channel",
@@ -1722,7 +1723,7 @@ test("SDK v2 validates schemas and tools independently in modern and legacy mode
     });
     try {
       await client.connect(transport);
-      assert.equal((await client.listTools()).tools.length, 11);
+      assert.equal((await client.listTools()).tools.length, 12);
       const result = await client.callTool({ name: "get_context", arguments: {} });
       assert.equal(result.structuredContent.data.kind, "servers");
       assert.match(result.structuredContent.meta.instructions.text, /talkto:\/\/instructions/);

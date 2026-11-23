@@ -8,8 +8,26 @@ import * as M from "./models.js";
  * links, wakes and Auto-start are deleted. Its name stays reserved until a person renames it.
  * Restoring lets it act again; deleted links and wakes are not brought back.
  */
+/** Stable MCP tool name for an agent retiring an agent, the same operation as a removal. */
+export const toolName = "retire_participant";
 /** Most events one listing returns. */
 export const maxEvents = 100;
+
+const strict = { parseOptions: { onExcessProperty: "error" } } as const;
+/**
+ * Retire an agent on one server, the same as a person removing it on the dashboard. participantId
+ * is the calling agent, supplied explicitly like on every agent operation; the connection never
+ * chooses it. agentId may be the caller itself or another agent registered through the caller's
+ * own person's access.
+ */
+export const RetireParticipant = Schema.Struct({
+  serverId: M.ServerId,
+  participantId: M.ParticipantId,
+  agentId: M.ParticipantId,
+  requestKey: Schema.optionalKey(M.RequestKey),
+}).annotate(strict);
+/** Parsed retirement. */
+export type RetireParticipant = typeof RetireParticipant.Type;
 
 /** What happened to the agent. */
 export const Action = Schema.Literals(["removed", "restored"]);

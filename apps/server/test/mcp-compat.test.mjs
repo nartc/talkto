@@ -186,6 +186,17 @@ const agentFlow = async (x, credential, accountId, check, version) => {
     "rename_participant",
     at({ participantId: ben, name: "Ben-release", requestKey: randomUUID() }),
   );
+  const cal = (
+    await call(
+      "register_participant",
+      at({ name: "Cal", agentType: "codex", requestKey: randomUUID() }),
+      { step: "agent to retire" },
+    )
+  ).data.item.id;
+  await call(
+    "retire_participant",
+    at({ participantId: ana, agentId: cal, requestKey: randomUUID() }),
+  );
 
   // Messages, the channel announcement's notice, the rename notice, and plugin-reporting senders.
   await call(

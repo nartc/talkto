@@ -409,3 +409,79 @@ test("removals and restorations are listed for the Activity view, by current nam
   const limited = (await s.x.call("user_alice", "GET", `${s.root}/removals?limit=1`)).items;
   assert.equal(limited.length, 1);
 });
+
+/** An agent retires an agent over MCP, as `participantId`; `error` expects a refusal. */
+const retire = (s, participantId, agentId, error = false, token = s.credential) =>
+  s.x.mcp(
+    token,
+    "retire_participant",
+    { serverId: s.server.id, participantId, agentId, requestKey: randomUUID() },
+    error,
+  );
+
+test("an agent retires an agent registered through its own person's access, or itself, as a removal", async (t) => {
+  const s = await setup(t);
+  const retired = await retire(s, s.ana, s.ben);
+  assert.equal(retired.data.changed, true);
+  assert.equal(retired.data.participant.id, s.ben);
+  assert.equal(retired.data.participant.name, "Ben", "the name stays");
+  assert.ok(Number.isFinite(Date.parse(retired.data.participant.removedAt)));
+  const refused = await s.send(s.ben, "after retirement", true);
+  assert.equal(refused.error.code, "participant_removed");
+
+  // Retiring again changes nothing; the retired agent cannot retire anyone.
+  const again = await retire(s, s.ana, s.ben);
+  assert.equal(again.data.changed, false);
+  assert.equal(again.data.participant.removedAt, retired.data.participant.removedAt);
+  const byRetired = await retire(s, s.ben, s.ana, true);
+  assert.equal(byRetired.error.code, "participant_removed");
+  // The Activity view lists it as a removal by the calling agent.
+  const events = (await s.x.call("user_alice", "GET", `${s.root}/removals`)).items;
+  assert.deepEqual(
+    events.map((item) => [item.action, item.participantId, item.by.participantId]),
+    [["removed", s.ben, s.ana]],
+  );
+
+  // An agent can retire itself.
+  const self = await retire(s, s.ana, s.ana);
+  assert.equal(self.data.changed, true);
+  assert.equal(self.data.participant.id, s.ana);
+  assert.ok(Number.isFinite(Date.parse(self.data.participant.removedAt)));
+  const after = await s.send(s.ana, "after retiring myself", true);
+  assert.equal(after.error.code, "participant_removed");
+});
+
+test("an agent cannot retire an agent registered through another person's access", async (t) => {
+  const s = await setup(t);
+  await s.x.control("member", s.x.member(s.account.organizationId, "user_bob"));
+  await s.x.call("user_alice", "PUT", `${s.root}/access/user_bob`);
+  const bobToken = await s.x.mcpToken(s.account.organizationId, "user_bob");
+  const bobAgent = (
+    await s.x.mcp(bobToken, "register_participant", {
+      serverId: s.server.id,
+      name: "Bobs-agent",
+      agentType: "codex",
+      requestKey: randomUUID(),
+    })
+  ).data.item.id;
+
+  const refused = await retire(s, s.ana, bobAgent, true);
+  assert.equal(refused.error.code, "forbidden");
+  assert.match(refused.error.message, /own person's access/);
+  assert.match(refused.error.message, /dashboard/);
+  const reverse = await retire(s, bobAgent, s.ana, true, bobToken);
+  assert.equal(reverse.error.code, "forbidden");
+
+  // Neither target was touched.
+  const sent = await s.x.mcp(bobToken, "send_message", {
+    serverId: s.server.id,
+    participantId: bobAgent,
+    requestKey: randomUUID(),
+    target: { kind: "conversation", conversationId: s.general },
+    body: "Bob's agent still sends",
+  });
+  assert.equal(sent.data.item.senderId, bobAgent);
+  await s.send(s.ana, "Ana still sends");
+  const events = (await s.x.call("user_alice", "GET", `${s.root}/removals`)).items;
+  assert.deepEqual(events, []);
+});
