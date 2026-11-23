@@ -122,16 +122,19 @@ export interface Interface {
   /**
    * An agent retires an agent, itself or another, exactly as a person removes it on the dashboard.
    * Allowed only when the target was registered through the caller's own person's access, the same
-   * rule as `renameSelf`. Already removed: nothing changes. Restoring stays on the dashboard.
+   * rule as `renameSelf`. `releaseName` first renames it to `<name>-r-<id8>` in the same
+   * transaction, even when it is already removed, which frees its name. Nothing left to do: nothing
+   * changes. Restoring stays on the dashboard.
    */
   readonly retireAgent: (
     access: AccessContext,
     participantId: M.ParticipantId,
-    agentId: M.ParticipantId,
-  ) => Response<
-    Removals.Result,
-    E.ParticipantNotFound | E.NotAnAgent | E.ParticipantRemoved | E.RetireNotAllowed
-  >;
+    input: {
+      readonly agentId: M.ParticipantId;
+      readonly releaseName?: boolean;
+      readonly requestKey?: M.RequestKey;
+    },
+  ) => Response<Removals.Result, RenameFailure | E.RetireNotAllowed>;
   /**
    * A signed-in person renames one agent on a server they can access, like other dashboard agent
    * management. The first call can create the person's participant from `person.name`.
@@ -542,9 +545,12 @@ const registration = Effect.fn("TalkTo.describeRegistration")(function* (
   if (general === null) return yield* Effect.die("Initialized server is missing General");
   return yield* describe(tx, { ...result, generalConversationId: general.id }, [general], [], true);
 });
-/** Who a rename acts for: the agent itself, or the signed-in person's participant. */
+/**
+ * Who a rename acts for: the agent itself, or the signed-in person's participant. `allowRemoved`
+ * lets an agent operation rename a removed agent; only retiring with `releaseName` sets it.
+ */
 type RenameActor =
-  | { readonly kind: "self" }
+  | { readonly kind: "self"; readonly allowRemoved?: true }
   | { readonly kind: "person"; readonly participantId: M.ParticipantId };
 /**
  * Rename one agent inside an authorized transaction. A retry of the same grant's request key
@@ -576,9 +582,10 @@ const renameParticipant = Effect.fn("TalkTo.renameParticipant")(function* (
     const current = yield* participant(tx, input.participantId);
     return empty<R.Result>({ participant: current, rename: prior, changed: false });
   }
-  // A person may rename an agent they removed, which frees its name for a new agent.
+  // A person may rename an agent they removed, which frees its name for a new agent; so may an
+  // agent retiring it with releaseName.
   const target =
-    actor.kind === "self"
+    actor.kind === "self" && actor.allowRemoved !== true
       ? yield* Actors.requireAgent(tx, input.participantId)
       : yield* Actors.requireAgentRecord(tx, input.participantId);
   if (target.name === input.name)
@@ -602,6 +609,15 @@ const renameParticipant = Effect.fn("TalkTo.renameParticipant")(function* (
   const current = yield* participant(tx, target.id);
   return empty<R.Result>({ participant: current, rename, changed: true });
 });
+/**
+ * The name retiring with releaseName gives an agent: `<name>-r-<first 8 characters of its id>`,
+ * the name cut so the whole stays within 64 characters. Null when it already ends that way.
+ */
+const releasedName = (item: M.Participant): M.Name | null => {
+  const suffix = `-r-${item.id.slice(0, 8)}`;
+  if (item.name.endsWith(suffix)) return null;
+  return M.Name.make(`${item.name.slice(0, 64 - suffix.length)}${suffix}`);
+};
 const describeMessages = Effect.fn("TalkTo.describeMessages")(function* <A>(
   tx: Store.Session,
   data: A,
@@ -1404,12 +1420,14 @@ export const layer = Layer.effect(
           return result;
         },
       ),
-      retireAgent: Effect.fn("TalkTo.retireAgent")(function* (access, participantId, agentId) {
+      retireAgent: Effect.fn("TalkTo.retireAgent")(function* (access, participantId, input) {
+        const renameId = R.RenameId.make(yield* ids.uuid());
+        const requestKey = input.requestKey ?? M.RequestKey.make(yield* ids.uuid());
         const at = yield* now;
         const result = yield* run(access, "retireAgent", (tx) =>
           Effect.gen(function* () {
             const caller = yield* Actors.requireAgent(tx, participantId);
-            const target = yield* Actors.requireAgentRecord(tx, agentId);
+            const target = yield* Actors.requireAgentRecord(tx, input.agentId);
             // The same rule as renameSelf: the connection cannot say which of the person's agents
             // is calling, so registration through that person's access is the whole check.
             if ((yield* tx.registeredBy(target.id)) !== access.principalKey)
@@ -1417,12 +1435,29 @@ export const layer = Layer.effect(
                 message:
                   "An agent can retire only an agent registered through its own person's access. Ask that person to remove it on the TalkTo dashboard.",
               });
-            if (target.removedAt !== undefined)
-              return empty<Removals.Result>({ participant: target, changed: false });
+            let current = target;
+            let changed = false;
+            const name = input.releaseName === true ? releasedName(target) : null;
+            if (name !== null) {
+              // Renamed while still active, before the removal, as a normal rename notice.
+              const renamed = yield* renameParticipant(
+                tx,
+                access,
+                { participantId: target.id, name, requestKey },
+                { kind: "self", allowRemoved: true },
+                renameId,
+                at,
+              );
+              current = renamed.data.participant;
+              changed = renamed.data.changed;
+            }
+            if (current.removedAt !== undefined)
+              return empty<Removals.Result>({ participant: current, changed });
             return yield* removeAgent(tx, target.id, caller.id, at);
           }),
         );
-        // A waiting get_updates for the retired agent reads again and ends with its refusal.
+        // A waiting get_updates for the retired agent reads again and ends with its refusal; every
+        // reader receives a rename.
         if (result.data.changed) yield* signal.notifyAll();
         return result;
       }),

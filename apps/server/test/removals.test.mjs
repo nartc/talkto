@@ -485,3 +485,97 @@ test("an agent cannot retire an agent registered through another person's access
   const events = (await s.x.call("user_alice", "GET", `${s.root}/removals`)).items;
   assert.deepEqual(events, []);
 });
+
+/** Retire with releaseName over Alice's connection; returns the MCP reply. */
+const release = (s, participantId, agentId, requestKey = randomUUID()) =>
+  s.x.mcp(s.credential, "retire_participant", {
+    serverId: s.server.id,
+    participantId,
+    agentId,
+    releaseName: true,
+    requestKey,
+  });
+const renamesOf = async (s, participantId) =>
+  (
+    await s.x.call("user_alice", "GET", `${s.root}/renames?participantId=${participantId}`)
+  ).items.map((item) => [item.previousName, item.name, item.renamedBy.kind]);
+
+test("retiring with releaseName renames the agent first, which frees its name; repeating changes nothing", async (t) => {
+  const s = await setup(t);
+  const released = `Ben-r-${s.ben.slice(0, 8)}`;
+  const key = randomUUID();
+  const retired = await release(s, s.ana, s.ben, key);
+  assert.equal(retired.data.changed, true);
+  assert.equal(retired.data.participant.id, s.ben);
+  assert.equal(retired.data.participant.name, released);
+  assert.ok(Number.isFinite(Date.parse(retired.data.participant.removedAt)));
+  assert.deepEqual(await renamesOf(s, s.ben), [["Ben", released, "self"]]);
+  const events = (await s.x.call("user_alice", "GET", `${s.root}/removals`)).items;
+  assert.deepEqual(
+    events.map((item) => [item.action, item.participantId, item.name]),
+    [["removed", s.ben, released]],
+  );
+
+  // The old name is free for a new registration.
+  const newcomer = await s.register("Ben");
+  assert.notEqual(newcomer.data.item.id, s.ben);
+  assert.equal(newcomer.data.item.name, "Ben");
+
+  // Repeating, with the same requestKey or a new one, changes nothing.
+  for (const requestKey of [key, randomUUID()]) {
+    const again = await release(s, s.ana, s.ben, requestKey);
+    assert.equal(again.data.changed, false, requestKey);
+    assert.equal(again.data.participant.name, released);
+    assert.equal(again.data.participant.removedAt, retired.data.participant.removedAt);
+  }
+  assert.equal((await renamesOf(s, s.ben)).length, 1);
+  assert.equal((await s.x.call("user_alice", "GET", `${s.root}/removals`)).items.length, 1);
+});
+
+test("releaseName renames an agent already removed, and never adds the suffix twice", async (t) => {
+  const s = await setup(t);
+  assert.equal((await s.remove(s.ben)).status, 200);
+  const released = `Ben-r-${s.ben.slice(0, 8)}`;
+  const renamed = await release(s, s.ana, s.ben);
+  assert.equal(renamed.data.changed, true, "the rename is the change");
+  assert.equal(renamed.data.participant.name, released);
+  assert.ok(renamed.data.participant.removedAt);
+  assert.deepEqual(await renamesOf(s, s.ben), [["Ben", released, "self"]]);
+  assert.equal((await s.x.call("user_alice", "GET", `${s.root}/removals`)).items.length, 1);
+  assert.equal((await release(s, s.ana, s.ben)).data.changed, false);
+  // Renaming a removed agent stays refused everywhere else.
+  const refused = await s.call(
+    "rename_participant",
+    { participantId: s.ben, name: "ben-again", requestKey: randomUUID() },
+    true,
+  );
+  assert.equal(refused.error.code, "participant_removed");
+
+  // An active agent whose name already carries its suffix is only removed.
+  const cal = (await s.register("Cal")).data.item.id;
+  const suffixed = `Cal-r-${cal.slice(0, 8)}`;
+  await s.call("rename_participant", {
+    participantId: cal,
+    name: suffixed,
+    requestKey: randomUUID(),
+  });
+  const removed = await release(s, s.ana, cal);
+  assert.equal(removed.data.changed, true);
+  assert.equal(removed.data.participant.name, suffixed);
+  assert.ok(removed.data.participant.removedAt);
+  assert.deepEqual(await renamesOf(s, cal), [["Cal", suffixed, "self"]]);
+});
+
+test("releaseName cuts a long name so the released name fits 64 characters", async (t) => {
+  const s = await setup(t);
+  const long = `L${"o".repeat(62)}g`;
+  assert.equal(long.length, 64);
+  const agent = (await s.register(long)).data.item.id;
+  const retired = await release(s, agent, agent);
+  const expected = `${long.slice(0, 53)}-r-${agent.slice(0, 8)}`;
+  assert.equal(expected.length, 64);
+  assert.equal(retired.data.changed, true);
+  assert.equal(retired.data.participant.name, expected);
+  assert.ok(retired.data.participant.removedAt);
+  assert.equal((await s.register(long)).data.item.name, long, "the long name is free again");
+});

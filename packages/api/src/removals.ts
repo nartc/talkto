@@ -18,12 +18,15 @@ const strict = { parseOptions: { onExcessProperty: "error" } } as const;
  * Retire an agent on one server, the same as a person removing it on the dashboard. participantId
  * is the calling agent, supplied explicitly like on every agent operation; the connection never
  * chooses it. agentId may be the caller itself or another agent registered through the caller's
- * own person's access.
+ * own person's access. `releaseName: true` (default false) first renames it to
+ * `<name>-r-<first 8 characters of its id>`, which frees its name for a new registration;
+ * `requestKey` keys that rename.
  */
 export const RetireParticipant = Schema.Struct({
   serverId: M.ServerId,
   participantId: M.ParticipantId,
   agentId: M.ParticipantId,
+  releaseName: Schema.optionalKey(Schema.Boolean),
   requestKey: Schema.optionalKey(M.RequestKey),
 }).annotate(strict);
 /** Parsed retirement. */

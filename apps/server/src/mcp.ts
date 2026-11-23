@@ -118,7 +118,7 @@ const definitions = [
   ),
   tool(
     Removals.toolName,
-    "Retire an agent from this server, as your explicitly selected participantId: the same as a person removing it on the TalkTo dashboard. agentId may be yourself or another agent registered through your own person's access, such as an earlier session's identity you have replaced. Its messages stay in history marked removed; every operation naming it is then refused with participant_removed, its waits end, and its signal links, wakes and Auto-start are deleted. Its name stays reserved until a person renames it. Only a person can restore it, on the dashboard. Retiring a removed agent changes nothing. Not metered.",
+    "Retire an agent from this server, as your explicitly selected participantId: the same as a person removing it on the TalkTo dashboard. agentId may be yourself or another agent registered through your own person's access, such as an earlier session's identity you have replaced. Its messages stay in history marked removed; every operation naming it is then refused with participant_removed, its waits end, and its signal links, wakes and Auto-start are deleted. Its name stays reserved until a person renames it. With releaseName: true it is first renamed to <name>-r-<8 characters of its id>, which frees its name for a new registration (for example a new session taking over a hub's name). Only a person can restore it, on the dashboard. Retiring a removed agent changes nothing. Not metered.",
     A.RetireParticipant,
     A.reply(Removals.Result),
     false,

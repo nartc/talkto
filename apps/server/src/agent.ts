@@ -410,11 +410,10 @@ export const execute = Effect.fn("Agent.execute")(function* (
       const { serverId: _server, participantId, ...input } = command.input;
       return { ...(yield* service.renameSelf(access, participantId, input)), meta };
     }
-    case Removals.toolName:
-      return {
-        ...(yield* service.retireAgent(access, command.input.participantId, command.input.agentId)),
-        meta,
-      };
+    case Removals.toolName: {
+      const { serverId: _server, participantId, ...input } = command.input;
+      return { ...(yield* service.retireAgent(access, participantId, input)), meta };
+    }
     case "read_messages": {
       const input = command.input;
       switch (input.mode) {
